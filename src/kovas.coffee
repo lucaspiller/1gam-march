@@ -48,6 +48,14 @@ class CanvasRendererComponent
     @ctx.fillRect(x, y, 5, 5)
     @ctx.restore()
 
+  drawPlayer: (x, y) ->
+    x *= 25
+    y *= 25
+    @ctx.save()
+    @ctx.fillStyle = '#ff0'
+    @ctx.fillRect(x, y, 25, 25)
+    @ctx.restore()
+
   clear: ->
     @ctx.clearRect 0, 0, @width, @height
 
@@ -60,26 +68,18 @@ class KeyboardInputComponent
   }
 
   constructor: ->
+    true
 
   start: ->
     @keys = []
-    @keysUp = []
-    @keysDown = []
     window.onkeydown = @keyDown
     window.onkeyup = @keyUp
 
   isKeyDown: (key) ->
     @keys[MAPPING[key]]
 
-  keyWentUp: (key) ->
-    @keysUp[MAPPING[key]]
-
-  keyWentDown: (key) ->
-    @keysDown[MAPPING[key]]
-
   keyDown: (e) =>
     @keys[e.keyCode] = true
-    @keysDown[e.keyCode] = true
 
     # prevent arrow keys from scrolling page
     if e.keyCode >= 37 && e.keyCode <= 40
@@ -87,23 +87,18 @@ class KeyboardInputComponent
 
   keyUp: (e) =>
     @keys[e.keyCode] = false
-    @keysUp[e.keyCode] = true
-
-  update: ->
-    @keysUp = []
-    @keysDown = []
 
   moveLeft: ->
-    @keyWentDown('left')
+    @isKeyDown('left')
 
   moveRight: ->
-    @keyWentDown('right')
+    @isKeyDown('right')
 
   moveUp: ->
-    @keyWentDown('up')
+    @isKeyDown('up')
 
   moveDown: ->
-    @keyWentDown('down')
+    @isKeyDown('down')
 
 # Singleton to keep track of tile types
 Tile =
@@ -137,7 +132,11 @@ class Map
     @_loadLevel MAPS[@levelIndex].data
 
   tileType: (x, y) ->
+    return undefined unless @isInBounds(x, y)
     @tiles[y][x]
+
+  isInBounds: (x, y) ->
+    (x >= 0 && x <= @width) && (y >= 0 && y <= @height)
 
   _loadLevel: (data) ->
     x = 0
@@ -164,19 +163,84 @@ class Map
           else
             throw "Don't know what to do with #{char.charCodeAt(0)} #{char}!"
 
+Direction =
+  left:  0,
+  right: 1,
+  up:    2,
+  down:  3
+
+class Player
+  MOVE_DELAY = 20
+
+  constructor: (@map) ->
+    # TODO get start position from map
+    @x = 1
+    @y = 1
+    @direction = Direction.down
+    @nextMoveIn = MOVE_DELAY
+
+  update: ->
+    @nextMoveIn -= 1
+    if @nextMoveIn <= 0
+      newPosition = @newPosition(@direction)
+      if newPosition
+        [@x, @y] = newPosition
+        @nextMoveIn = MOVE_DELAY
+
+  canMove: (direction) ->
+    @newPosition(direction) != undefined
+
+  newPosition: (direction) ->
+    newX = @x
+    newY = @y
+    switch direction
+      when Direction.left  then newX -= 1
+      when Direction.right then newX += 1
+      when Direction.up    then newY -= 1
+      when Direction.down  then newY += 1
+    if @map.tileType(newX, newY) != Tile.wall
+      [newX, newY]
+    else
+      undefined
+
+  moveLeft: ->
+    if @canMove(Direction.left)
+      @direction = Direction.left
+
+  moveRight: ->
+    if @canMove(Direction.right)
+      @direction = Direction.right
+
+  moveUp: ->
+    if @canMove(Direction.up)
+      @direction = Direction.up
+
+  moveDown: ->
+    if @canMove(Direction.down)
+      @direction = Direction.down
+
 class Kovas
   constructor: (@options) ->
     true
 
   run: ->
     @map = new Map()
+    @player = new Player(@map)
     @options.input.start()
     @options.renderer.start()
     window.requestAnimationFrame @update
 
   update: =>
     # handle input
-    @options.input.update()
+    if @options.input.moveLeft()
+      @player.moveLeft()
+    if @options.input.moveRight()
+      @player.moveRight()
+    if @options.input.moveUp()
+      @player.moveUp()
+    if @options.input.moveDown()
+      @player.moveDown()
+    @player.update()
 
     # render
     @options.renderer.clear()
@@ -191,5 +255,8 @@ class Kovas
             @options.renderer.drawWallTile(x, y)
           when Tile.food
             @options.renderer.drawFoodTile(x, y)
+
+    # player
+    @options.renderer.drawPlayer(@player.x, @player.y)
 
     window.requestAnimationFrame @update

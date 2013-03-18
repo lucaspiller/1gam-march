@@ -11,7 +11,7 @@ dev:
 setup-ghpages:
 	rm -Rf _deploy
 	mkdir _deploy
-	cd _deploy && git init && git remote add origin git@github.com:lucaspiller/1gam-january.git && git checkout -b gh-pages
+	cd _deploy && git init && git remote add origin git@github.com:lucaspiller/1gam-march.git && git checkout -b gh-pages
 
 publish: setup-ghpages
 	rm -Rf _deploy/*
