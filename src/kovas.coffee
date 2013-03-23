@@ -138,6 +138,9 @@ class Map
   isInBounds: (x, y) ->
     (x >= 0 && x <= @width) && (y >= 0 && y <= @height)
 
+  eatFood: (x, y) ->
+    @tiles[y][x] = Tile.empty
+
   _loadLevel: (data) ->
     x = 0
     y = 0
@@ -185,6 +188,10 @@ class Player
       newPosition = @newPosition(@direction)
       if newPosition
         [@x, @y] = newPosition
+
+        if @map.tileType(@x, @y) == Tile.food
+          @map.eatFood(@x, @y)
+
         @nextMoveIn = MOVE_DELAY
 
   canMove: (direction) ->
