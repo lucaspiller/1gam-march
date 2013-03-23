@@ -18,6 +18,15 @@ document.addEventListener 'DOMContentLoaded', ->
   }
   game.run()
 
+# Bubble Sort!
+Array::sortBy = (fun) ->
+  for i in [0...(@length - 1)]
+    for j in [0...(@length - 1) - i]
+      js = fun(this[j])
+      jsn = fun(this[j+1])
+      [this[j], this[j+1]] = [this[j+1], this[j]] if fun(this[j]) > fun(this[j+1])
+  this
+
 class CanvasRendererComponent
   constructor: (@element) ->
     @width = window.innerWidth
@@ -69,6 +78,14 @@ class CanvasRendererComponent
     y *= 25
     @ctx.save()
     @ctx.fillStyle = '#ff0'
+    @ctx.fillRect(x, y, 25, 25)
+    @ctx.restore()
+
+  drawGhost: (x, y) ->
+    x *= 25
+    y *= 25
+    @ctx.save()
+    @ctx.fillStyle = '#f00'
     @ctx.fillRect(x, y, 25, 25)
     @ctx.restore()
 
@@ -201,15 +218,12 @@ Direction =
   up:    2,
   down:  3
 
-class Player
-  MOVE_DELAY = 20
-
+class Actor
   constructor: (@map) ->
     # TODO get start position from map
-    @x = 1
-    @y = 1
-    @direction = Direction.down
-    @nextMoveIn = MOVE_DELAY
+    [@x, @y] = @startPosition()
+    @direction = @startDirection()
+    @nextMoveIn = @moveDelay()
 
   update: ->
     @nextMoveIn -= 1
@@ -217,7 +231,8 @@ class Player
       newPosition = @newPosition(@direction)
       if newPosition
         [@x, @y] = newPosition
-        @nextMoveIn = MOVE_DELAY
+        @nextMoveIn = @moveDelay()
+        @movedTile()
 
   canMove: (direction) ->
     @newPosition(direction) != undefined
@@ -235,6 +250,10 @@ class Player
     else
       undefined
 
+  movedTile: ->
+    true
+
+class Player extends Actor
   moveLeft: ->
     if @canMove(Direction.left)
       @direction = Direction.left
@@ -250,6 +269,91 @@ class Player
   moveDown: ->
     if @canMove(Direction.down)
       @direction = Direction.down
+
+  moveDelay: ->
+    20
+
+  # TODO get start position from map
+  startPosition: ->
+    [1, 1]
+
+  startDirection: ->
+    Direction.down
+
+class Ghost extends Actor
+  constructor: (@map, @player) ->
+    super(@map)
+
+  update: ->
+    @nextMoveIn -= 1
+    if @nextMoveIn <= 0
+      newPosition = @newPosition(@direction)
+      if newPosition
+        [@x, @y] = newPosition
+        @nextMoveIn = @moveDelay()
+        @movedTile()
+
+  movedTile: ->
+    # simple math...
+    # 1) find which directions we can move in
+    @canMoveUp = @direction != Direction.down && @canMove(Direction.up)
+    @canMoveLeft = @direction != Direction.right && @canMove(Direction.left)
+    @canMoveDown = @direction != Direction.up && @canMove(Direction.down)
+    @canMoveRight = @direction != Direction.left && @canMove(Direction.right)
+
+    # 2) find the target distance if we move into that tile
+    if @canMoveUp
+      [x, y] = @newPosition(Direction.up)
+      @upDistance = @calculateDistance(x, y, @player.x, @player.y)
+    else
+      @upDistance = Infinity
+
+    if @canMoveLeft
+      [x, y] = @newPosition(Direction.left)
+      @leftDistance = @calculateDistance(x, y, @player.x, @player.y)
+    else
+      @leftDistance = Infinity
+
+    if @canMoveDown
+      [x, y] = @newPosition(Direction.down)
+      @downDistance = @calculateDistance(x, y, @player.x, @player.y)
+    else
+      @downDistance = Infinity
+
+    if @canMoveRight
+      [x, y] = @newPosition(Direction.right)
+      @rightDistance = @calculateDistance(x, y, @player.x, @player.y)
+    else
+      @rightDistance = Infinity
+
+    # 3) bubble sort the distances to find the direction which will put us
+    # closest to the target
+    distances = [
+      { direction: Direction.up, distance: @upDistance },
+      { direction: Direction.left, distance: @leftDistance },
+      { direction: Direction.down, distance: @downDistance },
+      { direction: Direction.right, distance: @rightDistance }
+    ]
+
+    distances.sortBy (e) ->
+      e.distance
+
+    @direction = distances[0].direction
+
+  calculateDistance: (x, y, tx, ty) ->
+    dx = Math.abs(tx - x)
+    dy = Math.abs(ty - y)
+    dx + dy
+
+  moveDelay: ->
+    30
+
+  # TODO get start position from map
+  startPosition: ->
+    [10, 5]
+
+  startDirection: ->
+    Direction.left
 
 class Scorer
   constructor: (@map, @player, @gameWinCallback) ->
@@ -279,6 +383,7 @@ class Kovas
   run: ->
     @mode = GameMode.intro
     @map = new Map()
+    @ghosts = []
     @options.input.start()
     @options.renderer.start()
     window.requestAnimationFrame @update
@@ -287,6 +392,7 @@ class Kovas
     if @map.remainingFood == 0
       @map = new Map()
     @player = new Player(@map)
+    @ghosts = [new Ghost(@map, @player)]
     @scorer = new Scorer(@map, @player, @gameWin)
     @mode = GameMode.play
 
@@ -306,6 +412,10 @@ class Kovas
         @player.moveDown()
       @player.update()
       @scorer.update()
+
+    # update ghosts
+    for ghost in @ghosts
+      ghost.update()
 
     # render
     @options.renderer.clear()
@@ -327,6 +437,9 @@ class Kovas
     # player
     if @player
       @options.renderer.drawPlayer(@player.x, @player.y)
+
+    for ghost in @ghosts
+      @options.renderer.drawGhost(ghost.x, ghost.y)
 
     if @mode != GameMode.play
       @options.renderer.drawIntro()
