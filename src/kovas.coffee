@@ -22,21 +22,29 @@ class CanvasRendererComponent
   constructor: (@element) ->
     @width = window.innerWidth
     @height = window.innerHeight
+    @drawIntroState = 40
 
   start: ->
     @canvas = document.createElement 'canvas'
     @canvas.width = @width - 50
     @canvas.height = @height - 50
     @ctx = @canvas.getContext '2d'
+    @ctx.font = "normal 20px Share Tech Mono"
     @element.appendChild @canvas
 
   drawScore: (score) ->
     @ctx.save()
     @ctx.translate(0, -20)
-    @ctx.font = "normal 20px Share Tech Mono"
     @ctx.fillStyle = '#fff'
     @ctx.fillText("Score: " + score, 0, 0)
     @ctx.restore()
+
+  drawIntro: ->
+    if @drawIntroState > 0
+      @ctx.save()
+      @ctx.fillStyle = '#fff'
+      @ctx.fillText("Press SPACE to begin", 140, 310)
+      @ctx.restore()
 
   drawEmptyTile: (x, y) ->
     # Nothing to render
@@ -65,6 +73,9 @@ class CanvasRendererComponent
     @ctx.restore()
 
   clear: ->
+    @drawIntroState -= 1
+    if @drawIntroState < -40
+      @drawIntroState = 40
     @ctx.restore()
     @ctx.clearRect 0, 0, @width, @height
     @ctx.save()
@@ -75,7 +86,8 @@ class KeyboardInputComponent
     'left': 37,
     'right': 39,
     'down': 40,
-    'up': 38
+    'up': 38,
+    'space': 32
   }
 
   constructor: ->
@@ -93,7 +105,7 @@ class KeyboardInputComponent
     @keys[e.keyCode] = true
 
     # prevent arrow keys from scrolling page
-    if e.keyCode >= 37 && e.keyCode <= 40
+    if (e.keyCode >= 37 && e.keyCode <= 40) || e.keyCode == 32
       return false
 
   keyUp: (e) =>
@@ -110,6 +122,9 @@ class KeyboardInputComponent
 
   moveDown: ->
     @isKeyDown('down')
+
+  startGame: ->
+    @isKeyDown('space')
 
 # Singleton to keep track of tile types
 Tile =
@@ -140,6 +155,7 @@ class Map
     @tiles = {}
     @width = 0
     @height = 0
+    @remainingFood = 0
     @_loadLevel MAPS[@levelIndex].data
 
   tileType: (x, y) ->
@@ -150,6 +166,7 @@ class Map
     (x >= 0 && x <= @width) && (y >= 0 && y <= @height)
 
   eatFood: (x, y) ->
+    @remainingFood -= 1
     @tiles[y][x] = Tile.empty
 
   _loadLevel: (data) ->
@@ -167,6 +184,7 @@ class Map
 
         switch char
           when "."
+            @remainingFood += 1
             @tiles[y] ||= {}
             @tiles[y][x] = Tile.food
             x += 1
@@ -234,7 +252,7 @@ class Player
       @direction = Direction.down
 
 class Scorer
-  constructor: (@map, @player) ->
+  constructor: (@map, @player, @gameWinCallback) ->
     @score = 0
 
   update: ->
@@ -242,37 +260,58 @@ class Scorer
       @map.eatFood(@player.x, @player.y)
       @incrementScore()
 
+    if @map.remainingFood == 0
+      @gameWinCallback()
+
   incrementScore: ->
     @score += 10
+
+GameMode =
+  intro: 0,
+  play:  1,
+  won:   2,
+  lost:  3
 
 class Kovas
   constructor: (@options) ->
     true
 
   run: ->
+    @mode = GameMode.intro
     @map = new Map()
-    @player = new Player(@map)
-    @scorer = new Scorer(@map, @player)
     @options.input.start()
     @options.renderer.start()
     window.requestAnimationFrame @update
 
+  gameStart: ->
+    if @map.remainingFood == 0
+      @map = new Map()
+    @player = new Player(@map)
+    @scorer = new Scorer(@map, @player, @gameWin)
+    @mode = GameMode.play
+
+  gameWin: =>
+    @mode = GameMode.won
+
   update: =>
-    # handle input
-    if @options.input.moveLeft()
-      @player.moveLeft()
-    if @options.input.moveRight()
-      @player.moveRight()
-    if @options.input.moveUp()
-      @player.moveUp()
-    if @options.input.moveDown()
-      @player.moveDown()
-    @player.update()
-    @scorer.update()
+    if @mode == GameMode.play
+      # handle input
+      if @options.input.moveLeft()
+        @player.moveLeft()
+      if @options.input.moveRight()
+        @player.moveRight()
+      if @options.input.moveUp()
+        @player.moveUp()
+      if @options.input.moveDown()
+        @player.moveDown()
+      @player.update()
+      @scorer.update()
 
     # render
     @options.renderer.clear()
-    @options.renderer.drawScore(@scorer.score)
+
+    if @scorer
+      @options.renderer.drawScore(@scorer.score)
 
     # render map
     for y in [0..@map.height]
@@ -286,6 +325,12 @@ class Kovas
             @options.renderer.drawFoodTile(x, y)
 
     # player
-    @options.renderer.drawPlayer(@player.x, @player.y)
+    if @player
+      @options.renderer.drawPlayer(@player.x, @player.y)
+
+    if @mode != GameMode.play
+      @options.renderer.drawIntro()
+      if @options.input.startGame()
+        @gameStart()
 
     window.requestAnimationFrame @update
