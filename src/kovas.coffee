@@ -30,6 +30,14 @@ class CanvasRendererComponent
     @ctx = @canvas.getContext '2d'
     @element.appendChild @canvas
 
+  drawScore: (score) ->
+    @ctx.save()
+    @ctx.translate(0, -20)
+    @ctx.font = "normal 20px Share Tech Mono"
+    @ctx.fillStyle = '#fff'
+    @ctx.fillText("Score: " + score, 0, 0)
+    @ctx.restore()
+
   drawEmptyTile: (x, y) ->
     # Nothing to render
     true
@@ -57,7 +65,10 @@ class CanvasRendererComponent
     @ctx.restore()
 
   clear: ->
+    @ctx.restore()
     @ctx.clearRect 0, 0, @width, @height
+    @ctx.save()
+    @ctx.translate(0, 40)
 
 class KeyboardInputComponent
   MAPPING = {
@@ -188,10 +199,6 @@ class Player
       newPosition = @newPosition(@direction)
       if newPosition
         [@x, @y] = newPosition
-
-        if @map.tileType(@x, @y) == Tile.food
-          @map.eatFood(@x, @y)
-
         @nextMoveIn = MOVE_DELAY
 
   canMove: (direction) ->
@@ -226,6 +233,18 @@ class Player
     if @canMove(Direction.down)
       @direction = Direction.down
 
+class Scorer
+  constructor: (@map, @player) ->
+    @score = 0
+
+  update: ->
+    if @map.tileType(@player.x, @player.y) == Tile.food
+      @map.eatFood(@player.x, @player.y)
+      @incrementScore()
+
+  incrementScore: ->
+    @score += 10
+
 class Kovas
   constructor: (@options) ->
     true
@@ -233,6 +252,7 @@ class Kovas
   run: ->
     @map = new Map()
     @player = new Player(@map)
+    @scorer = new Scorer(@map, @player)
     @options.input.start()
     @options.renderer.start()
     window.requestAnimationFrame @update
@@ -248,9 +268,11 @@ class Kovas
     if @options.input.moveDown()
       @player.moveDown()
     @player.update()
+    @scorer.update()
 
     # render
     @options.renderer.clear()
+    @options.renderer.drawScore(@scorer.score)
 
     # render map
     for y in [0..@map.height]
