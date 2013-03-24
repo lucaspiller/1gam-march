@@ -170,10 +170,10 @@ class Map
 ######.###.#.###.######
 #....#...........#....#
 #.##.#.#### ####.#.##.#
-#.##.#.#       #.#.##.#
-#......#   g   #......#
-#.##.#.#       #.#.##.#
-#.##.#.#########.#.##.#
+#.##.#...#   #...#.##.#
+#......#.# g #.#......#
+#.##.#...#   #...#.##.#
+#.##.#.#### ####.#.##.#
 #....#...........#....#
 ######.###.#.###.######
 #......#...#...#......#
@@ -321,9 +321,19 @@ class Player extends Actor
   startDirection: ->
     Direction.down
 
+GhostMode =
+  scatter: 0,
+  chase: 1
+
 class Ghost extends Actor
+  MODE_DELAY_CHASE: 60 * 30
+  MODE_DELAY_SCATTER: 60 * 5
+
   constructor: (@map, @player) ->
+    @mode_delay = @MODE_DELAY_CHASE
+    @mode = GhostMode.scatter
     super(@map)
+    @updateTargetting()
 
   update: ->
     @nextMoveIn -= 1
@@ -334,13 +344,32 @@ class Ghost extends Actor
         @nextMoveIn = @moveDelay()
         @movedTile()
 
+    @mode_delay -= 1
+    if @mode_delay <= 0
+      if @mode == GhostMode.scatter
+        @mode = GhostMode.chase
+        @mode_delay = @MODE_DELAY_CHASE
+      else
+        @mode = GhostMode.scatter
+        @mode_delay = @MODE_DELAY_SCATTER
+      @updateTargetting(true)
+
   movedTile: ->
+    @updateTargetting()
+
+  updateTargetting: (canReverse = false) ->
     # simple math...
     # 1) find which directions we can move in
-    @canMoveUp = @direction != Direction.down && @canMove(Direction.up)
-    @canMoveLeft = @direction != Direction.right && @canMove(Direction.left)
-    @canMoveDown = @direction != Direction.up && @canMove(Direction.down)
-    @canMoveRight = @direction != Direction.left && @canMove(Direction.right)
+    if canReverse
+      @canMoveUp = @canMove(Direction.up)
+      @canMoveLeft = @canMove(Direction.left)
+      @canMoveDown = @canMove(Direction.down)
+      @canMoveRight = @canMove(Direction.right)
+    else
+      @canMoveUp = @direction != Direction.down && @canMove(Direction.up)
+      @canMoveLeft = @direction != Direction.right && @canMove(Direction.left)
+      @canMoveDown = @direction != Direction.up && @canMove(Direction.down)
+      @canMoveRight = @direction != Direction.left && @canMove(Direction.right)
 
     target = @getTarget()
 
@@ -392,25 +421,35 @@ class Ghost extends Actor
     30
 
   startDirection: ->
-    Math.floor(Math.random() * 2)
+    0
 
   startPosition: ->
     [x, y] = @map.ghostStartPosition
     [x + Math.round((Math.random() * 2) - 1), y + Math.round((Math.random() * 2) - 1)]
 
   getTarget: ->
-    @player
+    if @mode == GhostMode.chase
+      @customTarget()
+    else
+      @chaseTarget()
+
+  respawn: ->
+    super()
+    @updateTargetting()
 
 class RedGhost extends Ghost
   colour: '#f00'
 
+  customTarget: ->
+    @player
+
   chaseTarget: ->
-    [0, 3]
+    { x: 4, y: 3 }
 
 class PinkGhost extends Ghost
   colour: '#f9c'
 
-  getTarget: ->
+  customTarget: ->
     [x, y] = @player.addToPosition(@player.position, 4)
     { x: x, y: y }
 
@@ -418,12 +457,12 @@ class PinkGhost extends Ghost
     30
 
   chaseTarget: ->
-    [@map.width, 3]
+    { x: @map.width - 4, y: 3 }
 
 class CyanGhost extends Ghost
   colour: '#6ff'
 
-  getTarget: ->
+  customTarget: ->
     [x, y] = @player.addToPosition(@player.position, 6)
     { x: x, y: y }
 
@@ -431,30 +470,26 @@ class CyanGhost extends Ghost
     35
 
   chaseTarget: ->
-    [0, @map.height - 3]
+    { x: 4, y: @map.height - 3 }
 
 class OrangeGhost extends Ghost
-  MODE_PLAYER: 0
-  MODE_CHASE: 1
-
   colour: '#f93'
 
-  getTarget: ->
-    if @targeting_mode == @MODE_PLAYER
+  customTarget: ->
+    if @targeting_mode == GhostMode.chase
       if @calculateDistance(@x, @y, @player.x, @player.y) < 8
-        @targeting_mode = @MODE_CHASE
+        @targeting_mode = GhostMode.scatter
       @player
     else
-      [x, y] = @chaseTarget()
       if @calculateDistance(@x, @y, @player.x, @player.y) >= 8
-        @targeting_mode = @MODE_PLAYER
-      { x: x, y: y }
+        @targeting_mode = GhostMode.chase
+      @chaseTarget()
 
   moveDelay: ->
     40
 
   chaseTarget: ->
-    [@map.width, @map.height - 3]
+    { x: @map.width - 4, y: @map.height - 3 }
 
 
 class Scorer
