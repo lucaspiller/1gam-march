@@ -442,10 +442,14 @@ class OrangeGhost extends Ghost
 
 
 class Scorer
-  constructor: (@map, @player, @gameWinCallback) ->
+  constructor: (@map, @player, @ghosts, @gameWinCallback, @gameOverCallback) ->
     @score = 0
 
   update: ->
+    for ghost in @ghosts
+      if ghost.x == @player.x && ghost.y == @player.y
+        return @loseLife()
+
     if @map.tileType(@player.x, @player.y) == Tile.food
       @map.eatFood(@player.x, @player.y)
       @incrementScore()
@@ -455,6 +459,9 @@ class Scorer
 
   incrementScore: ->
     @score += 10
+
+  loseLife: ->
+    @gameOverCallback()
 
 GameMode =
   intro: 0,
@@ -484,11 +491,14 @@ class Kovas
       new CyanGhost(@map, @player),
       new OrangeGhost(@map, @player),
     ]
-    @scorer = new Scorer(@map, @player, @gameWin)
+    @scorer = new Scorer(@map, @player, @ghosts, @gameWin, @gameOver)
     @mode = GameMode.play
 
   gameWin: =>
     @mode = GameMode.won
+
+  gameOver: =>
+    @mode = GameMode.lost
 
   update: =>
     if @mode == GameMode.play
