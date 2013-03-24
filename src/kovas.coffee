@@ -48,6 +48,13 @@ class CanvasRendererComponent
     @ctx.fillText("Score: " + score, 0, 0)
     @ctx.restore()
 
+  drawLives: (lives) ->
+    @ctx.save()
+    @ctx.translate(0, -20)
+    @ctx.fillStyle = '#fff'
+    @ctx.fillText(Array(lives + 1).join("♥"), 500, 0)
+    @ctx.restore()
+
   drawIntro: ->
     if @drawIntroState > 0
       @ctx.save()
@@ -245,6 +252,7 @@ class Actor
     [@x, @y] = @startPosition()
     @direction = @startDirection()
     @nextMoveIn = @moveDelay()
+    @alive = true
 
   update: ->
     @nextMoveIn -= 1
@@ -277,6 +285,14 @@ class Actor
 
   movedTile: ->
     true
+
+  die: ->
+    @alive = false
+
+  respawn: ->
+    @alive = true
+    [@x, @y] = @startPosition()
+    @direction = @startDirection()
 
 class Player extends Actor
   moveLeft: ->
@@ -444,24 +460,36 @@ class OrangeGhost extends Ghost
 class Scorer
   constructor: (@map, @player, @ghosts, @gameWinCallback, @gameOverCallback) ->
     @score = 0
+    @lives = 3
 
   update: ->
-    for ghost in @ghosts
-      if ghost.x == @player.x && ghost.y == @player.y
-        return @loseLife()
+    if @player.alive
+      for ghost in @ghosts
+        if ghost.x == @player.x && ghost.y == @player.y
+          return @loseLife()
 
-    if @map.tileType(@player.x, @player.y) == Tile.food
-      @map.eatFood(@player.x, @player.y)
-      @incrementScore()
+      if @map.tileType(@player.x, @player.y) == Tile.food
+        @map.eatFood(@player.x, @player.y)
+        @incrementScore()
 
-    if @map.remainingFood == 0
-      @gameWinCallback()
+      if @map.remainingFood == 0
+        @gameWinCallback()
+    else
+      @respawnDelay -= 1
+      if @respawnDelay == 0
+        for ghost in @ghosts
+          ghost.respawn()
+        @player.respawn()
 
   incrementScore: ->
     @score += 10
 
   loseLife: ->
-    @gameOverCallback()
+    @lives -= 1
+    @player.die()
+    @respawnDelay = 60 * 3
+    if @lives == 0
+      @gameOverCallback()
 
 GameMode =
   intro: 0,
@@ -523,6 +551,7 @@ class Kovas
 
     if @scorer
       @options.renderer.drawScore(@scorer.score)
+      @options.renderer.drawLives(@scorer.lives)
 
     # render map
     for y in [0..@map.height]
@@ -536,7 +565,7 @@ class Kovas
             @options.renderer.drawFoodTile(x, y)
 
     # player
-    if @player
+    if @player && @player.alive
       @options.renderer.drawPlayer(@player.x, @player.y)
 
     for ghost in @ghosts
