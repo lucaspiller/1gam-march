@@ -52,7 +52,7 @@ class CanvasRendererComponent
     if @drawIntroState > 0
       @ctx.save()
       @ctx.fillStyle = '#fff'
-      @ctx.fillText("Press SPACE to begin", 140, 310)
+      @ctx.fillText("Press SPACE to begin", 178, 295)
       @ctx.restore()
 
   drawEmptyTile: (x, y) ->
@@ -153,17 +153,29 @@ class Map
   MAPS = [
     {
       data: """
-####################
-#....#........#....#
-#.##.#.######.#.##.#
-#.#..............#.#
-#.#.##.#.####.##.#.#
-#......#....#......#
-#.#.##.####.#.##.#.#
-#.#..#...........#.#
-#.##.#.######.#.##.#
-#....#........#....#
-####################
+#######################
+#..........#..........#
+#.###.####.#.####.###.#
+#.###.####.#.####.###.#
+#.....................#
+#.###.##.#####.##.###.#
+#......#...#...#......#
+######.###.#.###.######
+#....#...........#....#
+#.##.#.#### ####.#.##.#
+#.##.#.#       #.#.##.#
+#......#   g   #......#
+#.##.#.#       #.#.##.#
+#.##.#.#########.#.##.#
+#....#...........#....#
+######.###.#.###.######
+#......#...#...#......#
+#.###.##.#####.##.###.#
+#.....................#
+#.###.####.#.####.###.#
+#.###.####.#.####.###.#
+#..........#..........#
+#######################
       """
     }
   ]
@@ -209,6 +221,15 @@ class Map
             @tiles[y] ||= {}
             @tiles[y][x] = Tile.wall
             x += 1
+          when " "
+            @tiles[y] ||= {}
+            @tiles[y][x] = Tile.empty
+            x += 1
+          when "g"
+            @tiles[y] ||= {}
+            @tiles[y][x] = Tile.empty
+            @ghostStartPosition = [x, y]
+            x += 1
           else
             throw "Don't know what to do with #{char.charCodeAt(0)} #{char}!"
 
@@ -237,7 +258,7 @@ class Actor
   canMove: (direction) ->
     @newPosition(direction) != undefined
 
-  newPosition: (direction, amount = 1) ->
+  addToPosition: (direction, amount = 1) ->
     newX = @x
     newY = @y
     switch direction
@@ -245,6 +266,10 @@ class Actor
       when Direction.right then newX += amount
       when Direction.up    then newY -= amount
       when Direction.down  then newY += amount
+    [newX, newY]
+
+  newPosition: (direction) ->
+    [newX, newY] = @addToPosition(direction)
     if @map.tileType(newX, newY) != Tile.wall
       [newX, newY]
     else
@@ -350,12 +375,12 @@ class Ghost extends Actor
   moveDelay: ->
     30
 
-  # TODO get start position from map
-  startPosition: ->
-    [9 + (Math.floor(Math.random() * 2)), 5]
-
   startDirection: ->
     Math.floor(Math.random() * 2)
+
+  startPosition: ->
+    [x, y] = @map.ghostStartPosition
+    [x + Math.round((Math.random() * 2) - 1), y + Math.round((Math.random() * 2) - 1)]
 
   getTarget: ->
     @player
@@ -370,12 +395,8 @@ class PinkGhost extends Ghost
   colour: '#f9c'
 
   getTarget: ->
-    @_target = @player unless @_target
-    newTarget = @player.newPosition(@player.position, 4)
-    if newTarget
-      [x, y] = newTarget
-      @_target = { x: x, y: y }
-    @_target
+    [x, y] = @player.addToPosition(@player.position, 4)
+    { x: x, y: y }
 
   moveDelay: ->
     30
@@ -387,12 +408,8 @@ class CyanGhost extends Ghost
   colour: '#6ff'
 
   getTarget: ->
-    @_target = @player unless @_target
-    newTarget = @player.newPosition(@player.position, 6)
-    if newTarget
-      [x, y] = newTarget
-      @_target = { x: x, y: y }
-    @_target
+    [x, y] = @player.addToPosition(@player.position, 6)
+    { x: x, y: y }
 
   moveDelay: ->
     35
@@ -413,7 +430,7 @@ class OrangeGhost extends Ghost
       @player
     else
       [x, y] = @chaseTarget()
-      if @calculateDistance(@x, @y, @player.x, @player.y) >=2
+      if @calculateDistance(@x, @y, @player.x, @player.y) >= 8
         @targeting_mode = @MODE_PLAYER
       { x: x, y: y }
 
