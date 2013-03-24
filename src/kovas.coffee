@@ -81,11 +81,11 @@ class CanvasRendererComponent
     @ctx.fillRect(x, y, 25, 25)
     @ctx.restore()
 
-  drawGhost: (x, y) ->
+  drawGhost: (x, y, colour) ->
     x *= 25
     y *= 25
     @ctx.save()
-    @ctx.fillStyle = '#f00'
+    @ctx.fillStyle = colour
     @ctx.fillRect(x, y, 25, 25)
     @ctx.restore()
 
@@ -237,14 +237,14 @@ class Actor
   canMove: (direction) ->
     @newPosition(direction) != undefined
 
-  newPosition: (direction) ->
+  newPosition: (direction, amount = 1) ->
     newX = @x
     newY = @y
     switch direction
-      when Direction.left  then newX -= 1
-      when Direction.right then newX += 1
-      when Direction.up    then newY -= 1
-      when Direction.down  then newY += 1
+      when Direction.left  then newX -= amount
+      when Direction.right then newX += amount
+      when Direction.up    then newY -= amount
+      when Direction.down  then newY += amount
     if @map.tileType(newX, newY) != Tile.wall
       [newX, newY]
     else
@@ -301,28 +301,30 @@ class Ghost extends Actor
     @canMoveDown = @direction != Direction.up && @canMove(Direction.down)
     @canMoveRight = @direction != Direction.left && @canMove(Direction.right)
 
+    target = @getTarget()
+
     # 2) find the target distance if we move into that tile
     if @canMoveUp
       [x, y] = @newPosition(Direction.up)
-      @upDistance = @calculateDistance(x, y, @player.x, @player.y)
+      @upDistance = @calculateDistance(x, y, target.x, target.y)
     else
       @upDistance = Infinity
 
     if @canMoveLeft
       [x, y] = @newPosition(Direction.left)
-      @leftDistance = @calculateDistance(x, y, @player.x, @player.y)
+      @leftDistance = @calculateDistance(x, y, target.x, target.y)
     else
       @leftDistance = Infinity
 
     if @canMoveDown
       [x, y] = @newPosition(Direction.down)
-      @downDistance = @calculateDistance(x, y, @player.x, @player.y)
+      @downDistance = @calculateDistance(x, y, target.x, target.y)
     else
       @downDistance = Infinity
 
     if @canMoveRight
       [x, y] = @newPosition(Direction.right)
-      @rightDistance = @calculateDistance(x, y, @player.x, @player.y)
+      @rightDistance = @calculateDistance(x, y, target.x, target.y)
     else
       @rightDistance = Infinity
 
@@ -350,10 +352,77 @@ class Ghost extends Actor
 
   # TODO get start position from map
   startPosition: ->
-    [10, 5]
+    [9 + (Math.floor(Math.random() * 2)), 5]
 
   startDirection: ->
-    Direction.left
+    Math.floor(Math.random() * 2)
+
+  getTarget: ->
+    @player
+
+class RedGhost extends Ghost
+  colour: '#f00'
+
+  chaseTarget: ->
+    [0, 3]
+
+class PinkGhost extends Ghost
+  colour: '#f9c'
+
+  getTarget: ->
+    @_target = @player unless @_target
+    newTarget = @player.newPosition(@player.position, 4)
+    if newTarget
+      [x, y] = newTarget
+      @_target = { x: x, y: y }
+    @_target
+
+  moveDelay: ->
+    30
+
+  chaseTarget: ->
+    [@map.width, 3]
+
+class CyanGhost extends Ghost
+  colour: '#6ff'
+
+  getTarget: ->
+    @_target = @player unless @_target
+    newTarget = @player.newPosition(@player.position, 6)
+    if newTarget
+      [x, y] = newTarget
+      @_target = { x: x, y: y }
+    @_target
+
+  moveDelay: ->
+    35
+
+  chaseTarget: ->
+    [0, @map.height - 3]
+
+class OrangeGhost extends Ghost
+  MODE_PLAYER: 0
+  MODE_CHASE: 1
+
+  colour: '#f93'
+
+  getTarget: ->
+    if @targeting_mode == @MODE_PLAYER
+      if @calculateDistance(@x, @y, @player.x, @player.y) < 8
+        @targeting_mode = @MODE_CHASE
+      @player
+    else
+      [x, y] = @chaseTarget()
+      if @calculateDistance(@x, @y, @player.x, @player.y) >=2
+        @targeting_mode = @MODE_PLAYER
+      { x: x, y: y }
+
+  moveDelay: ->
+    40
+
+  chaseTarget: ->
+    [@map.width, @map.height - 3]
+
 
 class Scorer
   constructor: (@map, @player, @gameWinCallback) ->
@@ -392,7 +461,12 @@ class Kovas
     if @map.remainingFood == 0
       @map = new Map()
     @player = new Player(@map)
-    @ghosts = [new Ghost(@map, @player)]
+    @ghosts = [
+      new RedGhost(@map, @player),
+      new PinkGhost(@map, @player),
+      new CyanGhost(@map, @player),
+      new OrangeGhost(@map, @player),
+    ]
     @scorer = new Scorer(@map, @player, @gameWin)
     @mode = GameMode.play
 
@@ -439,7 +513,7 @@ class Kovas
       @options.renderer.drawPlayer(@player.x, @player.y)
 
     for ghost in @ghosts
-      @options.renderer.drawGhost(ghost.x, ghost.y)
+      @options.renderer.drawGhost(ghost.x, ghost.y, ghost.colour)
 
     if @mode != GameMode.play
       @options.renderer.drawIntro()
