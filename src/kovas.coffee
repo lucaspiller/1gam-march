@@ -167,7 +167,7 @@ class Map
 #.....................#
 #.###.##.#####.##.###.#
 #......#...#...#......#
-######.###.#.###.######
+##.###.###.#.###.###.##
 #....#...........#....#
 #.##.#.#### ####.#.##.#
 #.##.#...#   #...#.##.#
@@ -175,7 +175,7 @@ class Map
 #.##.#...#   #...#.##.#
 #.##.#.#### ####.#.##.#
 #....#...........#....#
-######.###.#.###.######
+##.###.###.#.###.###.##
 #......#...#...#......#
 #.###.##.#####.##.###.#
 #.....................#
@@ -330,7 +330,7 @@ class Ghost extends Actor
   MODE_DELAY_SCATTER: 60 * 5
 
   constructor: (@map, @player) ->
-    @mode_delay = @MODE_DELAY_CHASE
+    @mode_delay = @MODE_DELAY_SCATTER
     @mode = GhostMode.scatter
     super(@map)
     @updateTargetting()
@@ -341,7 +341,10 @@ class Ghost extends Actor
       newPosition = @newPosition(@direction)
       if newPosition
         [@x, @y] = newPosition
-        @nextMoveIn = @moveDelay()
+        if @mode == GhostMode.scatter
+          @nextMoveIn = @moveDelay() / 2
+        else
+          @nextMoveIn = @moveDelay()
         @movedTile()
 
     @mode_delay -= 1
@@ -435,6 +438,8 @@ class Ghost extends Actor
 
   respawn: ->
     super()
+    @mode_delay = @MODE_DELAY_SCATTER
+    @mode = GhostMode.scatter
     @updateTargetting()
 
 class RedGhost extends Ghost
