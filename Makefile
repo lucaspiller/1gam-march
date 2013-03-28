@@ -17,7 +17,6 @@ publish: setup-ghpages
 	rm -Rf _deploy/*
 	cp -R lib _deploy
 	cp -R media _deploy
-	cp -R vendor _deploy
 	cp style.css _deploy
 	cp index.html _deploy
 	cd _deploy && git add . && git add -u . && git commit -m "Updated `date`" && git push origin gh-pages --force

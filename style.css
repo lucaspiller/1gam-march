@@ -7,5 +7,5 @@ body {
   font-family: 'Share Tech Mono';
   font-style: normal;
   font-weight: 400;
-  src: local('Share Tech Mono'), local('ShareTechMono-Regular'), url(/media/share_tech_mono.woff) format('woff');
+  src: local('Share Tech Mono'), local('ShareTechMono-Regular'), url(media/share_tech_mono.woff) format('woff');
 }
